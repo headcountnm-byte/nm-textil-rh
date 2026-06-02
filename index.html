@@ -1181,9 +1181,14 @@ body.dark .form-group textarea { background: var(--bg); color: var(--text); }
                 <option value="">Todos os tipos</option>
                 <option value="login">Login</option>
                 <option value="add_func">Novo Funcionário</option>
-                <option value="edit_func">Edição</option>
-                <option value="del_func">Exclusão</option>
+                <option value="edit_func">Edição Funcionário</option>
+                <option value="del_func">Exclusão Funcionário</option>
                 <option value="aval">Avaliação</option>
+                <option value="feedback">Feedback</option>
+                <option value="falta">Falta/Atraso</option>
+                <option value="tarefa">Tarefa</option>
+                <option value="exclusao">Exclusão</option>
+                <option value="usuario">Usuário</option>
                 <option value="backup">Backup</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="exportarLogsExcel()">📊 Excel</button>
@@ -2302,6 +2307,8 @@ function salvarFeedback(){
     criadoPor: currentUser?.nome
   };
   DB.feedbacks.push(fb);
+  const _fbFunc = DB.funcionarios.find(x=>x.id===funcId);
+  addLog('feedback', `Novo feedback ${fb.tipo} para ${_fbFunc?.nome||'—'}`);
   saveDBDebounced(); closeModal('modal-feedback'); renderFeedbacks();
   toast('Feedback registrado','success');
 }
@@ -2352,6 +2359,8 @@ function salvarFalta(){
     criadoPor: currentUser?.nome
   };
   DB.faltas.push(ft);
+  const _ftFunc = DB.funcionarios.find(x=>x.id===funcId);
+  addLog('falta', `Registrou ${ft.tipo} para ${_ftFunc?.nome||'—'} em ${ft.data}`);
   saveDBDebounced(); closeModal('modal-falta'); renderFaltas(); renderFaltaStats();
   toast('Ocorrência registrada','success');
 }
@@ -2789,6 +2798,7 @@ function salvarTarefa(){
     criadoEm: new Date().toISOString()
   };
   DB.tarefas.push(t);
+  addLog('tarefa', `Nova tarefa: ${t.titulo} (${t.prioridade})`);
   saveDBDebounced(); closeModal('modal-tarefa'); renderTarefas();
   toast('Tarefa criada','success');
 }
@@ -2834,7 +2844,11 @@ function renderTarefas(){
 
 function moverTask(id, status){
   const t = DB.tarefas.find(x=>x.id===id);
-  if(t){ t.status=status; saveDBDebounced(); renderTarefas(); }
+  if(t){
+    const statusLabel = {todo:'A Fazer',doing:'Em Andamento',done:'Concluído'};
+    addLog('tarefa', `Tarefa "${t.titulo}" movida para ${statusLabel[status]||status}`);
+    t.status=status; saveDBDebounced(); renderTarefas();
+  }
 }
 
 // ===== USUÁRIOS =====
@@ -2857,10 +2871,12 @@ function salvarUsuario(){
   if(editId){
     const idx = DB.usuarios.findIndex(u=>u.id===editId);
     if(idx>=0){ DB.usuarios[idx]={...DB.usuarios[idx],nome,login,nivel:document.getElementById('user-nivel').value}; if(senha) DB.usuarios[idx].senha=senha; }
+    addLog('usuario', `Usuário atualizado: ${nome}`);
     toast('Usuário atualizado','success');
   } else {
     if(DB.usuarios.find(u=>u.login===login)){ toast('Login já em uso','error'); return; }
     DB.usuarios.push({id:uid(),nome,login,senha,nivel:document.getElementById('user-nivel').value});
+    addLog('usuario', `Novo usuário criado: ${nome} (${document.getElementById('user-nivel').value})`);
     toast('Usuário criado','success');
   }
   saveDBDebounced(); closeModal('modal-usuario'); renderUsuarios(); populateSelects();
@@ -3090,8 +3106,21 @@ function renderSysInfo(){
 
 // ===== UTILS =====
 function excluirItem(col, id, cb){
+  const colLabel = {
+    avaliacoes:'Avaliação', feedbacks:'Feedback', faltas:'Falta/Atraso',
+    tarefas:'Tarefa', usuarios:'Usuário', notificacoes:'Notificação'
+  };
   confirmar('Excluir este item?', ()=>{
+    // Pega o item antes de excluir para logar
+    const item = DB[col]?.find(x=>x.id===id);
+    let desc = colLabel[col]||col;
+    if(col==='avaliacoes'){ const f=DB.funcionarios.find(x=>x.id===item?.funcId); desc=`Avaliação de ${f?.nome||'—'}`; }
+    if(col==='feedbacks'){  const f=DB.funcionarios.find(x=>x.id===item?.funcId); desc=`Feedback de ${f?.nome||'—'} (${item?.tipo||''})`; }
+    if(col==='faltas'){     const f=DB.funcionarios.find(x=>x.id===item?.funcId); desc=`${item?.tipo||'Ocorrência'} de ${f?.nome||'—'} em ${item?.data||'—'}`; }
+    if(col==='tarefas'){    desc=`Tarefa: ${item?.titulo||'—'}`; }
+    if(col==='usuarios'){   desc=`Usuário: ${item?.nome||'—'}`; }
     DB[col] = DB[col].filter(x=>x.id!==id);
+    addLog('exclusao', `Excluiu ${desc}`);
     saveDBDebounced(); if(cb) cb();
     toast('Item excluído','success');
   });
@@ -3135,13 +3164,16 @@ function renderLogs(){
   if(tipo) data = data.filter(l=>l.type===tipo);
 
   const tipoLabel = {
-    login:'🔐 Login', add_func:'➕ Novo Func.', edit_func:'✏️ Edição',
-    del_func:'🗑️ Exclusão', aval:'⭐ Avaliação', backup:'💾 Backup',
-    aval_del:'❌ Aval. Excluída', feedback:'💬 Feedback'
+    login:'🔐 Login', add_func:'➕ Novo Func.', edit_func:'✏️ Edição Func.',
+    del_func:'🗑️ Excluiu Func.', aval:'⭐ Avaliação', backup:'💾 Backup',
+    feedback:'💬 Feedback', falta:'📅 Falta/Atraso', tarefa:'✅ Tarefa',
+    exclusao:'🗑️ Exclusão', usuario:'👤 Usuário'
   };
   const tipoBadge = {
     login:'badge-blue', add_func:'badge-green', edit_func:'badge-yellow',
-    del_func:'badge-red', aval:'badge-blue', backup:'badge-gray'
+    del_func:'badge-red', aval:'badge-blue', backup:'badge-gray',
+    feedback:'badge-blue', falta:'badge-yellow', tarefa:'badge-green',
+    exclusao:'badge-red', usuario:'badge-gray'
   };
 
   const total = data.length;
