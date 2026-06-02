@@ -1641,6 +1641,8 @@ async function saveDB(){
         usuarios: JSON.stringify(DB.usuarios),
         pesos: JSON.stringify(DB.pesos),
         config: JSON.stringify(DB.config),
+        logs: JSON.stringify(DB.logs||[]),
+        notificacoes: JSON.stringify(DB.notificacoes||[]),
         updatedAt: new Date().toISOString()
       });
       // Também salva localmente como cache
@@ -1677,8 +1679,8 @@ async function loadDB(){
         DB.usuarios     = JSON.parse(data.usuarios||'[]');
         DB.pesos        = JSON.parse(data.pesos||'{}');
         DB.config       = JSON.parse(data.config||'{}');
-        DB.notificacoes = DB.notificacoes||[];
-        DB.logs         = DB.logs||[];
+        DB.logs         = JSON.parse(data.logs||'[]');
+        DB.notificacoes = JSON.parse(data.notificacoes||'[]');
         console.log('✅ Dados carregados do Firestore');
         ensureSeed();
         return;
